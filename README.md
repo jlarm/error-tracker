@@ -71,7 +71,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `url` | `https://error-tracking.test/api/errors` | Full ingestion URL. |
+| `url` | `https://errors.armp.dev/api/errors` | Full ingestion URL. |
 | `key` | — | Project API key. |
 | `enabled` | `true` | Master switch. |
 | `release` | `null` | Identifier for this build/deploy. |
