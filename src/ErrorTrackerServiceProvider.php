@@ -6,7 +6,9 @@ namespace Armp\ErrorTracker;
 
 use Armp\ErrorTracker\Console\TestCommand;
 use Illuminate\Contracts\Config\Repository as Config;
+use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Support\ServiceProvider;
+use Throwable;
 
 class ErrorTrackerServiceProvider extends ServiceProvider
 {
@@ -23,6 +25,14 @@ class ErrorTrackerServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $this->callAfterResolving(ExceptionHandler::class, function ($handler) {
+            if (method_exists($handler, 'reportable')) {
+                $handler->reportable(function (Throwable $e) {
+                    $this->app->make(ErrorTracker::class)->capture($e, request());
+                });
+            }
+        });
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/error-tracker.php' => config_path('error-tracker.php'),
