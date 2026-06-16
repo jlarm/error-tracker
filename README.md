@@ -21,10 +21,9 @@ php artisan vendor:publish --tag=error-tracker-config
 
 ## Configuration
 
-Add the URL and key to your `.env`:
+Add your project key to `.env`:
 
 ```env
-ERROR_TRACKER_URL=https://error-tracking.test/api/errors
 ERROR_TRACKER_KEY=your-project-api-key
 ERROR_TRACKER_RELEASE=v1.0.0   # optional
 ```
@@ -72,7 +71,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 
 | Key | Default | Description |
 | --- | --- | --- |
-| `url` | — | Full ingestion URL. |
+| `url` | `https://error-tracking.test/api/errors` | Full ingestion URL. |
 | `key` | — | Project API key. |
 | `enabled` | `true` | Master switch. |
 | `release` | `null` | Identifier for this build/deploy. |

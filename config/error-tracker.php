@@ -11,7 +11,7 @@ return [
     | Example: https://error-tracking.test/api/errors
     |
     */
-    'url' => env('ERROR_TRACKER_URL'),
+    'url' => env('ERROR_TRACKER_URL', 'https://error-tracking.test/api/errors'),
 
     /*
     |--------------------------------------------------------------------------
