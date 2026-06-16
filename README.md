@@ -2,7 +2,7 @@
 
 Laravel SDK that ships exceptions to your self-hosted error-tracking dashboard.
 
-- Simple exception handler wiring — one closure in `bootstrap/app.php` and every throwable is forwarded.
+- Zero-config exception capture — the service provider wires itself in automatically.
 - Rich payload: exception class, message, file/line, stack trace, request, environment, release, tags, breadcrumbs, and nested context blocks.
 - Safe: the reporter never throws, has a short HTTP timeout, and respects scrub lists.
 - Idiomatic Laravel: facade, config publish, package auto-discovery, artisan test command.
@@ -29,25 +29,6 @@ ERROR_TRACKER_RELEASE=v1.0.0   # optional
 ```
 
 Grab `ERROR_TRACKER_KEY` from the `[API_KEY]` card on the project page in the dashboard.
-
-## Wire the exception handler
-
-Add one closure to `bootstrap/app.php` so every reported throwable is forwarded:
-
-```php
-use Armp\ErrorTracker\Facades\ErrorTracker;
-use Illuminate\Foundation\Configuration\Exceptions;
-use Throwable;
-
-return Application::configure(basePath: dirname(__DIR__))
-    // ... withRouting, withMiddleware
-    ->withExceptions(function (Exceptions $exceptions) {
-        $exceptions->report(function (Throwable $e) {
-            ErrorTracker::capture($e, request());
-        });
-    })
-    ->create();
-```
 
 ## Verify
 
