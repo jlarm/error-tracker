@@ -9,9 +9,24 @@ Laravel SDK that ships exceptions to your self-hosted error-tracking dashboard.
 
 ## Installation
 
-```bash
-composer require armp/error-tracker
+This package isn't published on Packagist, so point Composer at the Git repository. Add it to the `repositories` array in your app's `composer.json`:
+
+```json
+"repositories": [
+    {
+        "type": "vcs",
+        "url": "https://github.com/jlarm/error-tracker.git"
+    }
+]
 ```
+
+Then require the package by name:
+
+```bash
+composer require armp/error-tracker:dev-main
+```
+
+Use `dev-main` to track the default branch, or a tagged constraint (e.g. `^0.1.0`) once releases are published. For a private repository, Composer will use your GitHub token or SSH key — swap the URL for the `git@github.com:jlarm/error-tracker.git` form to authenticate over SSH.
 
 Publish the config (optional):
 
