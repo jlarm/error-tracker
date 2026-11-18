@@ -97,8 +97,21 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `scrubbed_inputs` | `password`, `token`, … | Request input keys to redact. |
 | `captured_headers` | `accept`, `user-agent`, … | Request headers to forward. |
 | `timeout` | `2` | HTTP timeout in seconds. |
+| `telemetry.enabled` | `false` | Record request telemetry (`ERROR_TRACKER_TELEMETRY`). Sending to the dashboard arrives in a later release. |
+| `telemetry.ignore_paths` | `['up']` | URL paths to skip, with `*` wildcards. |
+| `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
 
 All settings can be overridden via env vars prefixed with `ERROR_TRACKER_`.
+
+## Request telemetry
+
+When `telemetry.enabled` is on, the package records one entry per HTTP request: the route pattern (e.g. `/tickets/{ticket}`, never the raw URL), method, status code, duration in milliseconds, start time and the logged-in user's ID.
+
+- The entry is built after the response has been sent, so visitors never wait on it.
+- The user ID is only read if the request already authenticated the user; telemetry never triggers a session or database lookup.
+- Any error while recording is swallowed and never reaches your app.
+
+Entries go to the bound `Armp\ErrorTracker\Telemetry\TelemetryBuffer`. Until batching and sending ship, the default buffer discards them.
 
 ## Local development against this package
 

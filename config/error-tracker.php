@@ -142,4 +142,29 @@ return [
     */
     'timeout' => env('ERROR_TRACKER_TIMEOUT', 2),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Telemetry
+    |--------------------------------------------------------------------------
+    |
+    | Records one entry per HTTP request (route, method, status, duration and
+    | user id) after the response has been sent, for the dashboard's request
+    | and route charts. Off by default.
+    |
+    | ignore_paths:  URL paths to skip, with * wildcards (e.g. "up", "health*").
+    | ignore_routes: Route names to skip, with * wildcards (e.g. "horizon.*").
+    |
+    */
+    'telemetry' => [
+        'enabled' => env('ERROR_TRACKER_TELEMETRY', false),
+
+        'ignore_paths' => [
+            'up',
+        ],
+
+        'ignore_routes' => [
+            //
+        ],
+    ],
+
 ];
