@@ -9,6 +9,7 @@ use Armp\ErrorTracker\Console\TestCommand;
 use Armp\ErrorTracker\Telemetry\ExecutionContext;
 use Armp\ErrorTracker\Telemetry\FileTelemetryBuffer;
 use Armp\ErrorTracker\Telemetry\JobRecorder;
+use Armp\ErrorTracker\Telemetry\OutgoingRequestRecorder;
 use Armp\ErrorTracker\Telemetry\QueryRecorder;
 use Armp\ErrorTracker\Telemetry\RequestRecorder;
 use Armp\ErrorTracker\Telemetry\ScheduledTaskRecorder;
@@ -27,6 +28,8 @@ use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Http\Client\Events\ConnectionFailed;
+use Illuminate\Http\Client\Events\ResponseReceived;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
@@ -61,6 +64,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $this->app->singleton(ScheduledTaskRecorder::class);
         $this->app->singleton(ExecutionContext::class);
         $this->app->singleton(QueryRecorder::class);
+        $this->app->singleton(OutgoingRequestRecorder::class);
     }
 
     public function boot(): void
@@ -78,6 +82,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $this->registerScheduledTaskTelemetry();
         $this->registerExecutionContext();
         $this->registerQueryTelemetry();
+        $this->registerOutgoingRequestTelemetry();
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
@@ -230,6 +235,30 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $this->app->make(Dispatcher::class)->listen(QueryExecuted::class, function (QueryExecuted $query): void {
             try {
                 $this->app->make(QueryRecorder::class)->executed($query);
+            } catch (Throwable) {
+                // Telemetry must never reach the host app.
+            }
+        });
+    }
+
+    /**
+     * Record calls made with Laravel's HTTP client.
+     */
+    protected function registerOutgoingRequestTelemetry(): void
+    {
+        $events = $this->app->make(Dispatcher::class);
+
+        $events->listen(ResponseReceived::class, function (ResponseReceived $event): void {
+            try {
+                $this->app->make(OutgoingRequestRecorder::class)->received($event->request, $event->response);
+            } catch (Throwable) {
+                // Telemetry must never reach the host app.
+            }
+        });
+
+        $events->listen(ConnectionFailed::class, function (ConnectionFailed $event): void {
+            try {
+                $this->app->make(OutgoingRequestRecorder::class)->failed($event->request);
             } catch (Throwable) {
                 // Telemetry must never reach the host app.
             }

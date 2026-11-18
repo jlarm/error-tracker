@@ -104,6 +104,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
 | `telemetry.ignore_jobs` | `[]` | Job classes to skip, with `*` wildcards. |
 | `telemetry.slow_query_ms` | `100` | Database queries at least this slow are recorded (`ERROR_TRACKER_SLOW_QUERY_MS`). `0` turns it off. |
+| `telemetry.ignore_hosts` | `[]` | Outgoing HTTP client calls to skip, by host with `*` wildcards. |
 | `telemetry.ignore_tasks` | `[]` | Scheduled tasks to skip, with `*` wildcards, matched against the command (`backup:*`) or description. |
 | `telemetry.buffer_path` | `storage/framework/cache/error-tracker` | Where unsent telemetry is buffered. |
 | `telemetry.buffer_max_bytes` | `10485760` (10 MB) | Buffer cap; past it, new entries are dropped and the oldest unsent ones discarded. |
@@ -141,6 +142,10 @@ Each scheduled task run is recorded with its command (or description, for closur
 ### Slow queries
 
 Database queries at least `telemetry.slow_query_ms` (100ms by default) are recorded with their duration, connection and where they ran: the route (`GET /orders/{order}`), the queued job class, or the artisan command. Literal values are stripped first (`where email = ?`, `in (?)`), so no data from the query leaves your app and queries that differ only in their values group together. At most 50 slow queries are recorded per request, job or command.
+
+### Outgoing requests
+
+Calls your app makes with Laravel's HTTP client (`Http::get()` and friends) are recorded with their method, host, status and duration, and the route, job or command that made them. Only the scheme, host and port are sent (`https://api.stripe.com`), never the path, query string, headers or body. A call whose connection failed is recorded without a status. Calls to the error tracker itself are skipped, as are hosts in `telemetry.ignore_hosts`. At most 100 are recorded per request, job or command.
 
 ### Sending
 
