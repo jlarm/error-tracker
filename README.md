@@ -104,6 +104,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
 | `telemetry.ignore_jobs` | `[]` | Job classes to skip, with `*` wildcards. |
 | `telemetry.slow_query_ms` | `100` | Database queries at least this slow are recorded (`ERROR_TRACKER_SLOW_QUERY_MS`). `0` turns it off. |
+| `telemetry.timeline_threshold_ms` | `1000` | Requests at least this slow carry their timeline (`ERROR_TRACKER_TIMELINE_THRESHOLD_MS`). `0` turns it off. |
 | `telemetry.ignore_hosts` | `[]` | Outgoing HTTP client calls to skip, by host with `*` wildcards. |
 | `telemetry.ignore_tasks` | `[]` | Scheduled tasks to skip, with `*` wildcards, matched against the command (`backup:*`) or description. |
 | `telemetry.buffer_path` | `storage/framework/cache/error-tracker` | Where unsent telemetry is buffered. |
@@ -146,6 +147,10 @@ Database queries at least `telemetry.slow_query_ms` (100ms by default) are recor
 ### Outgoing requests
 
 Calls your app makes with Laravel's HTTP client (`Http::get()` and friends) are recorded with their method, host, status and duration, and the route, job or command that made them. Only the scheme, host and port are sent (`https://api.stripe.com`), never the path, query string, headers or body. A call whose connection failed is recorded without a status. Calls to the error tracker itself are skipped, as are hosts in `telemetry.ignore_hosts`. At most 100 are recorded per request, job or command.
+
+### Request timelines
+
+Requests at least `telemetry.timeline_threshold_ms` long (1 second by default) carry a timeline: every database query and outgoing HTTP call made while handling them, with when each started and how long it took, so the dashboard can show where the time went. Query SQL is stripped of literal values, and calls show only their method, host and status. Up to 200 spans are kept per request.
 
 ### Sending
 

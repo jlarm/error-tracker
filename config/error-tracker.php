@@ -180,6 +180,9 @@ return [
     |                      against the command ("backup:*") or description.
     | slow_query_ms:       Database queries at least this slow are recorded,
     |                      with literal values stripped. 0 turns it off.
+    | timeline_threshold_ms: Requests at least this slow carry their timeline
+    |                      (the queries and outgoing calls they made, with
+    |                      literal values stripped). 0 turns it off.
     | ignore_hosts:        Outgoing HTTP client calls to skip, by host with *
     |                      wildcards ("*.amazonaws.com"). Calls to the error
     |                      tracker itself are always skipped.
@@ -213,6 +216,8 @@ return [
         ],
 
         'slow_query_ms' => (float) env('ERROR_TRACKER_SLOW_QUERY_MS', 100),
+
+        'timeline_threshold_ms' => (float) env('ERROR_TRACKER_TIMELINE_THRESHOLD_MS', 1000),
 
         'ignore_hosts' => [
             //

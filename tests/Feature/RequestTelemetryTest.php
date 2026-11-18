@@ -1,10 +1,15 @@
 <?php
 
 use Armp\ErrorTracker\Telemetry\RequestRecorder;
+use Armp\ErrorTracker\Telemetry\RequestSpans;
 use Armp\ErrorTracker\Telemetry\TelemetryBuffer;
 use Armp\ErrorTracker\Tests\Fixtures\ArrayTelemetryBuffer;
 use Illuminate\Auth\GenericUser;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Route;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -190,4 +195,51 @@ test('keeps long partial labels within the tracker route limit', function () {
     expect(mb_strlen($route))->toBe(255)
         ->and($route)->toStartWith('/dashboard (partial: someVeryLongDeferredPropName1, ')
         ->and($route)->toEndWith('…)');
+});
+
+test('a slow request carries its timeline of queries and outgoing calls', function () {
+    config(['error-tracker.telemetry.timeline_threshold_ms' => 1]);
+    Http::fake(['api.example.com/*' => Http::response('ok', 201)]);
+
+    Route::get('/reports', function () {
+        Event::dispatch(new QueryExecuted(
+            "select * from reports where owner = 'ada' and id in (1, 2)", [], 3.5, DB::connection(),
+        ));
+        Http::post('https://api.example.com/v1/summaries?key=secret');
+        usleep(3000);
+
+        return 'ok';
+    });
+
+    $this->get('/reports')->assertOk();
+    app()->terminate();
+
+    $entry = collect($this->buffer->entries)->firstWhere('type', 'request');
+
+    expect($entry['spans'])->toHaveCount(2)
+        ->and($entry['spans'][0])->toMatchArray([
+            'type' => 'query',
+            'label' => 'select * from reports where owner = ? and id in (?)',
+            'duration_ms' => 3.5,
+        ])
+        ->and($entry['spans'][1]['type'])->toBe('http')
+        ->and($entry['spans'][1]['label'])->toBe('POST https://api.example.com 201')
+        ->and($entry['spans'][0]['offset_ms'])->toBeGreaterThanOrEqual(0)
+        ->and($entry['spans_dropped'])->toBe(0);
+});
+
+test('fast requests carry no timeline, and spans never leak into the next request', function () {
+    config(['error-tracker.telemetry.timeline_threshold_ms' => 60_000]);
+
+    Route::get('/quick', function () {
+        Event::dispatch(new QueryExecuted('select 1', [], 1, DB::connection()));
+
+        return 'ok';
+    });
+
+    $this->get('/quick')->assertOk();
+    app()->terminate();
+
+    expect(collect($this->buffer->entries)->firstWhere('type', 'request'))->not->toHaveKey('spans')
+        ->and(app(RequestSpans::class)->relativeTo(0))->toBe([]);
 });

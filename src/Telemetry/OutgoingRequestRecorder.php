@@ -31,6 +31,7 @@ class OutgoingRequestRecorder
         protected TelemetryBuffer $buffer,
         protected TelemetrySwitch $switch,
         protected ExecutionContext $context,
+        protected RequestSpans $spans,
     ) {}
 
     /**
@@ -60,11 +61,17 @@ class OutgoingRequestRecorder
                 return;
             }
 
+            $endedAt = microtime(true);
+            $this->spans->add(
+                'http',
+                strtoupper($request->method()).' '.$host.($status === null ? ' (no connection)' : ' '.$status),
+                $endedAt - ($durationMs ?? 0) / 1000,
+                $durationMs ?? 0.0,
+            );
+
             if (! $this->context->allow('outgoing_request', self::PER_CONTEXT_CAP)) {
                 return;
             }
-
-            $endedAt = microtime(true);
 
             $this->buffer->push([
                 'type' => 'outgoing_request',

@@ -33,6 +33,7 @@ class QueryRecorder
         protected TelemetryBuffer $buffer,
         protected TelemetrySwitch $switch,
         protected ExecutionContext $context,
+        protected RequestSpans $spans,
     ) {}
 
     /**
@@ -41,17 +42,22 @@ class QueryRecorder
     public function executed(QueryExecuted $query): void
     {
         try {
+            if (! $this->switch->isOn()) {
+                return;
+            }
+
+            $endedAt = microtime(true);
+            $this->spans->add('query', $query->sql, $endedAt - $query->time / 1000, (float) $query->time);
+
             $threshold = (float) $this->config->get('error-tracker.telemetry.slow_query_ms', 100);
 
-            if ($threshold <= 0 || $query->time < $threshold || ! $this->switch->isOn()) {
+            if ($threshold <= 0 || $query->time < $threshold) {
                 return;
             }
 
             if (! $this->context->allow('query', self::PER_CONTEXT_CAP)) {
                 return;
             }
-
-            $endedAt = microtime(true);
 
             $this->buffer->push([
                 'type' => 'query',

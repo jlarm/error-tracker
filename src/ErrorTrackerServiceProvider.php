@@ -12,6 +12,7 @@ use Armp\ErrorTracker\Telemetry\JobRecorder;
 use Armp\ErrorTracker\Telemetry\OutgoingRequestRecorder;
 use Armp\ErrorTracker\Telemetry\QueryRecorder;
 use Armp\ErrorTracker\Telemetry\RequestRecorder;
+use Armp\ErrorTracker\Telemetry\RequestSpans;
 use Armp\ErrorTracker\Telemetry\ScheduledTaskRecorder;
 use Armp\ErrorTracker\Telemetry\TelemetryBuffer;
 use Armp\ErrorTracker\Telemetry\TelemetrySwitch;
@@ -63,6 +64,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $this->app->singleton(JobRecorder::class);
         $this->app->singleton(ScheduledTaskRecorder::class);
         $this->app->singleton(ExecutionContext::class);
+        $this->app->singleton(RequestSpans::class);
         $this->app->singleton(QueryRecorder::class);
         $this->app->singleton(OutgoingRequestRecorder::class);
     }
@@ -210,19 +212,19 @@ class ErrorTrackerServiceProvider extends ServiceProvider
             ),
         ));
 
-        $events->listen(JobProcessing::class, $context(
-            fn (ExecutionContext $context, JobProcessing $event) => $context->enter($event->job->resolveName()),
-        ));
+        $events->listen(JobProcessing::class, $context(function (ExecutionContext $context, JobProcessing $event): void {
+            $context->enter($event->job->resolveName());
+            $this->app->make(RequestSpans::class)->clear();
+        }));
 
         foreach ([JobProcessed::class, JobFailed::class, JobReleasedAfterException::class] as $finished) {
             $events->listen($finished, $context(fn (ExecutionContext $context) => $context->leave()));
         }
 
-        $events->listen(CommandStarting::class, $context(
-            fn (ExecutionContext $context, CommandStarting $event) => $context->enter(
-                $event->command === null ? null : 'artisan '.$event->command,
-            ),
-        ));
+        $events->listen(CommandStarting::class, $context(function (ExecutionContext $context, CommandStarting $event): void {
+            $context->enter($event->command === null ? null : 'artisan '.$event->command);
+            $this->app->make(RequestSpans::class)->clear();
+        }));
 
         $events->listen(CommandFinished::class, $context(fn (ExecutionContext $context) => $context->leave()));
     }

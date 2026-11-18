@@ -38,6 +38,7 @@ class RequestRecorder
         protected CurrentUser $currentUser,
         protected TelemetryBuffer $buffer,
         protected TelemetrySwitch $switch,
+        protected RequestSpans $spans,
     ) {}
 
     /**
@@ -73,30 +74,48 @@ class RequestRecorder
             $this->request = null;
             $this->response = null;
             $this->handledAt = null;
+            $this->spans->clear();
         }
     }
 
     /**
-     * @return array{type: string, timestamp: string, method: string, route: string|null, route_name: string|null, status: int, duration_ms: float, user_id: int|string|null, user_name: string|null, user_email: string|null}
+     * Requests at least `telemetry.timeline_threshold_ms` long also carry
+     * their timeline: the queries and outgoing calls made while handling them.
+     *
+     * @return array<string, mixed>
      */
     protected function entryFor(Request $request, Response $response, float $handledAt): array
     {
         $startedAt = $this->startedAt($request, $handledAt);
         $route = $request->route();
         $user = $this->currentUser->resolve();
+        $durationMs = round(max(0.0, $handledAt - $startedAt) * 1000, 2);
 
-        return [
+        $entry = [
             'type' => 'request',
             'timestamp' => CarbonImmutable::createFromTimestampUTC($startedAt)->format('Y-m-d\TH:i:s.uP'),
             'method' => $request->getMethod(),
             'route' => $route instanceof Route ? $this->routeLabel($route, $request) : null,
             'route_name' => $route instanceof Route ? $route->getName() : null,
             'status' => $response->getStatusCode(),
-            'duration_ms' => round(max(0.0, $handledAt - $startedAt) * 1000, 2),
+            'duration_ms' => $durationMs,
             'user_id' => $user['id'] ?? null,
             'user_name' => $user['name'] ?? null,
             'user_email' => $user['email'] ?? null,
         ];
+
+        $timelineThreshold = (float) $this->config->get('error-tracker.telemetry.timeline_threshold_ms', 1000);
+
+        if ($timelineThreshold > 0 && $durationMs >= $timelineThreshold) {
+            $spans = $this->spans->relativeTo($startedAt);
+
+            if ($spans !== []) {
+                $entry['spans'] = $spans;
+                $entry['spans_dropped'] = $this->spans->dropped();
+            }
+        }
+
+        return $entry;
     }
 
     /**
