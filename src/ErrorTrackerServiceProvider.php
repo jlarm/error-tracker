@@ -7,13 +7,19 @@ namespace Armp\ErrorTracker;
 use Armp\ErrorTracker\Console\SendTelemetryCommand;
 use Armp\ErrorTracker\Console\TestCommand;
 use Armp\ErrorTracker\Telemetry\FileTelemetryBuffer;
+use Armp\ErrorTracker\Telemetry\JobRecorder;
 use Armp\ErrorTracker\Telemetry\RequestRecorder;
 use Armp\ErrorTracker\Telemetry\TelemetryBuffer;
+use Armp\ErrorTracker\Telemetry\TelemetrySwitch;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Foundation\Http\Events\RequestHandled;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\Events\JobReleasedAfterException;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
@@ -34,7 +40,11 @@ class ErrorTrackerServiceProvider extends ServiceProvider
             (int) $app->make(Config::class)->get('error-tracker.telemetry.buffer_max_bytes', 10 * 1024 * 1024),
         ));
         $this->app->singletonIf(TelemetryBuffer::class, FileTelemetryBuffer::class);
+        $this->app->singleton(TelemetrySwitch::class);
         $this->app->scoped(RequestRecorder::class);
+        // A singleton, not scoped: workers forget scoped instances between
+        // jobs, which would lose each attempt's start time.
+        $this->app->singleton(JobRecorder::class);
     }
 
     public function boot(): void
@@ -48,6 +58,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         });
 
         $this->registerRequestTelemetry();
+        $this->registerJobTelemetry();
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
@@ -91,5 +102,39 @@ class ErrorTrackerServiceProvider extends ServiceProvider
                 // Telemetry must never reach the host app.
             }
         });
+    }
+
+    /**
+     * Record each queued job attempt: when it starts, and how it ends.
+     */
+    protected function registerJobTelemetry(): void
+    {
+        $events = $this->app->make(Dispatcher::class);
+
+        $record = function (callable $callback): callable {
+            return function (object $event) use ($callback): void {
+                try {
+                    $callback($this->app->make(JobRecorder::class), $event);
+                } catch (Throwable) {
+                    // Telemetry must never reach the job.
+                }
+            };
+        };
+
+        $events->listen(JobProcessing::class, $record(
+            fn (JobRecorder $recorder, JobProcessing $event) => $recorder->started($event->job),
+        ));
+
+        $events->listen(JobProcessed::class, $record(
+            fn (JobRecorder $recorder, JobProcessed $event) => $recorder->finished($event->job, $recorder->outcomeOf($event->job)),
+        ));
+
+        $events->listen(JobReleasedAfterException::class, $record(
+            fn (JobRecorder $recorder, JobReleasedAfterException $event) => $recorder->finished($event->job, 'released'),
+        ));
+
+        $events->listen(JobFailed::class, $record(
+            fn (JobRecorder $recorder, JobFailed $event) => $recorder->finished($event->job, 'failed'),
+        ));
     }
 }

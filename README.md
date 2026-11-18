@@ -101,6 +101,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `telemetry.url` | derived | Telemetry endpoint; defaults to `url` with `/api/errors` → `/api/telemetry`. |
 | `telemetry.ignore_paths` | `['up']` | URL paths to skip, with `*` wildcards. |
 | `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
+| `telemetry.ignore_jobs` | `[]` | Job classes to skip, with `*` wildcards. |
 | `telemetry.buffer_path` | `storage/framework/cache/error-tracker` | Where unsent telemetry is buffered. |
 | `telemetry.buffer_max_bytes` | `10485760` (10 MB) | Buffer cap; past it, new entries are dropped and the oldest unsent ones discarded. |
 | `telemetry.max_batches_per_run` | `10` | Batches of 1,000 sent per minute while catching up. |
@@ -115,6 +116,16 @@ When `telemetry.enabled` is on, the package records one entry per HTTP request: 
 - Inertia partial reloads (deferred props, `router.reload({ only })`) are recorded as their own route, labelled with the props requested, e.g. `/dashboard (partial: weeklyDigestSummary)`. Slow deferred props then show up separately instead of being blended into the page's numbers.
 - The user ID is only read if the request already authenticated the user; telemetry never triggers a session or database lookup.
 - Any error while recording is swallowed and never reaches your app.
+
+### Jobs
+
+Each queued job attempt is recorded too: the job class, queue, connection, attempt number, duration and how it ended:
+
+- `processed`: it ran to completion.
+- `released`: it was put back on the queue, after an exception with tries left or by middleware such as `RateLimited`.
+- `failed`: it threw on its last try, called `$this->fail()`, or ran past its attempts or `retryUntil()`.
+
+Each attempt is recorded once, and recording errors never reach the job.
 
 ### Sending
 

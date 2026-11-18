@@ -37,6 +37,7 @@ class RequestRecorder
         protected Config $config,
         protected AuthFactory $auth,
         protected TelemetryBuffer $buffer,
+        protected TelemetrySwitch $switch,
     ) {}
 
     /**
@@ -61,7 +62,7 @@ class RequestRecorder
                 return;
             }
 
-            if (! $this->isEnabled() || $this->shouldIgnore($this->request)) {
+            if (! $this->switch->isOn() || $this->shouldIgnore($this->request)) {
                 return;
             }
 
@@ -169,19 +170,6 @@ class RequestRecorder
         $id = $guard->id();
 
         return is_int($id) || is_string($id) ? $id : null;
-    }
-
-    protected function isEnabled(): bool
-    {
-        if (! $this->config->get('error-tracker.enabled', true)
-            || ! $this->config->get('error-tracker.telemetry.enabled', false)
-            || blank($this->config->get('error-tracker.key'))) {
-            return false;
-        }
-
-        $environments = array_filter((array) $this->config->get('error-tracker.environments', []));
-
-        return $environments === [] || in_array(app()->environment(), $environments, true);
     }
 
     protected function shouldIgnore(Request $request): bool
