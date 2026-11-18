@@ -97,9 +97,13 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `scrubbed_inputs` | `password`, `token`, … | Request input keys to redact. |
 | `captured_headers` | `accept`, `user-agent`, … | Request headers to forward. |
 | `timeout` | `2` | HTTP timeout in seconds. |
-| `telemetry.enabled` | `false` | Record request telemetry (`ERROR_TRACKER_TELEMETRY`). Sending to the dashboard arrives in a later release. |
+| `telemetry.enabled` | `false` | Record and send request telemetry (`ERROR_TRACKER_TELEMETRY`). |
+| `telemetry.url` | derived | Telemetry endpoint; defaults to `url` with `/api/errors` → `/api/telemetry`. |
 | `telemetry.ignore_paths` | `['up']` | URL paths to skip, with `*` wildcards. |
 | `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
+| `telemetry.buffer_path` | `storage/framework/cache/error-tracker` | Where unsent telemetry is buffered. |
+| `telemetry.buffer_max_bytes` | `10485760` (10 MB) | Buffer cap; past it, new entries are dropped and the oldest unsent ones discarded. |
+| `telemetry.max_batches_per_run` | `10` | Batches of 1,000 sent per minute while catching up. |
 
 All settings can be overridden via env vars prefixed with `ERROR_TRACKER_`.
 
@@ -111,7 +115,23 @@ When `telemetry.enabled` is on, the package records one entry per HTTP request: 
 - The user ID is only read if the request already authenticated the user; telemetry never triggers a session or database lookup.
 - Any error while recording is swallowed and never reaches your app.
 
-Entries go to the bound `Armp\ErrorTracker\Telemetry\TelemetryBuffer`. Until batching and sending ship, the default buffer discards them.
+### Sending
+
+Entries are appended to a small file buffer under `storage/framework/cache/error-tracker/`. Every minute, `php artisan error-tracker:send-telemetry` sends them to the dashboard in batches of up to 1,000 and clears what was sent.
+
+The package schedules that command itself when telemetry is enabled, so there is nothing to add to your app's schedule. Your server only needs Laravel's scheduler running, which it already does if you use scheduled commands:
+
+```
+* * * * * cd /path-to-your-app && php artisan schedule:run >> /dev/null 2>&1
+```
+
+If the dashboard is unreachable, unsent entries are kept and retried on the next run. A batch the dashboard rejects as malformed is dropped rather than retried forever. The buffer is capped (`telemetry.buffer_max_bytes`), so a long outage drops the oldest telemetry instead of filling the disk. Your app is never affected either way.
+
+### Enabling
+
+```env
+ERROR_TRACKER_TELEMETRY=true
+```
 
 ## Local development against this package
 

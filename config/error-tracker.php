@@ -151,12 +151,26 @@ return [
     | user id) after the response has been sent, for the dashboard's request
     | and route charts. Off by default.
     |
-    | ignore_paths:  URL paths to skip, with * wildcards (e.g. "up", "health*").
-    | ignore_routes: Route names to skip, with * wildcards (e.g. "horizon.*").
+    | Entries are buffered on local disk and sent in batches every minute by
+    | the `error-tracker:send-telemetry` command, which this package schedules
+    | automatically. Your app only needs the scheduler running.
+    |
+    | url:                 Telemetry endpoint. Derived from `url` above
+    |                      (…/api/errors → …/api/telemetry) when empty.
+    | ignore_paths:        URL paths to skip, with * wildcards (e.g. "up").
+    | ignore_routes:       Route names to skip, with * wildcards ("horizon.*").
+    | buffer_path:         Where the buffer lives. Defaults to
+    |                      storage/framework/cache/error-tracker.
+    | buffer_max_bytes:    Cap on the buffer. Past it, new entries are dropped
+    |                      and the oldest unsent ones are discarded.
+    | max_batches_per_run: Batches (1,000 entries each) sent per minute while
+    |                      catching up after an outage.
     |
     */
     'telemetry' => [
         'enabled' => env('ERROR_TRACKER_TELEMETRY', false),
+
+        'url' => env('ERROR_TRACKER_TELEMETRY_URL'),
 
         'ignore_paths' => [
             'up',
@@ -165,6 +179,12 @@ return [
         'ignore_routes' => [
             //
         ],
+
+        'buffer_path' => env('ERROR_TRACKER_TELEMETRY_BUFFER_PATH'),
+
+        'buffer_max_bytes' => (int) env('ERROR_TRACKER_TELEMETRY_BUFFER_MAX_BYTES', 10 * 1024 * 1024),
+
+        'max_batches_per_run' => 10,
     ],
 
 ];
