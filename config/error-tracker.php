@@ -144,6 +144,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Send User Details
+    |--------------------------------------------------------------------------
+    |
+    | The logged-in user's id is always sent with exceptions and request
+    | telemetry. Turn this on to also send their name and email, so the
+    | dashboard can show who was affected. Off by default: names and emails
+    | are personal data.
+    |
+    */
+    'send_user_details' => env('ERROR_TRACKER_SEND_USER_DETAILS', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Telemetry
     |--------------------------------------------------------------------------
     |

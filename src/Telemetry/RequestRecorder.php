@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Armp\ErrorTracker\Telemetry;
 
+use Armp\ErrorTracker\CurrentUser;
 use Carbon\CarbonImmutable;
-use Illuminate\Contracts\Auth\Factory as AuthFactory;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Route;
@@ -35,7 +35,7 @@ class RequestRecorder
 
     public function __construct(
         protected Config $config,
-        protected AuthFactory $auth,
+        protected CurrentUser $currentUser,
         protected TelemetryBuffer $buffer,
         protected TelemetrySwitch $switch,
     ) {}
@@ -77,12 +77,13 @@ class RequestRecorder
     }
 
     /**
-     * @return array{type: string, timestamp: string, method: string, route: string|null, route_name: string|null, status: int, duration_ms: float, user_id: int|string|null}
+     * @return array{type: string, timestamp: string, method: string, route: string|null, route_name: string|null, status: int, duration_ms: float, user_id: int|string|null, user_name: string|null, user_email: string|null}
      */
     protected function entryFor(Request $request, Response $response, float $handledAt): array
     {
         $startedAt = $this->startedAt($request, $handledAt);
         $route = $request->route();
+        $user = $this->currentUser->resolve();
 
         return [
             'type' => 'request',
@@ -92,7 +93,9 @@ class RequestRecorder
             'route_name' => $route instanceof Route ? $route->getName() : null,
             'status' => $response->getStatusCode(),
             'duration_ms' => round(max(0.0, $handledAt - $startedAt) * 1000, 2),
-            'user_id' => $this->userId(),
+            'user_id' => $user['id'] ?? null,
+            'user_name' => $user['name'] ?? null,
+            'user_email' => $user['email'] ?? null,
         ];
     }
 
@@ -153,23 +156,6 @@ class RequestRecorder
         }
 
         return defined('LARAVEL_START') ? (float) LARAVEL_START : $handledAt;
-    }
-
-    /**
-     * The logged-in user's ID, only if the guard already resolved the user
-     * during the request. Never triggers a session or database lookup.
-     */
-    protected function userId(): int|string|null
-    {
-        $guard = $this->auth->guard();
-
-        if (! method_exists($guard, 'hasUser') || ! $guard->hasUser()) {
-            return null;
-        }
-
-        $id = $guard->id();
-
-        return is_int($id) || is_string($id) ? $id : null;
     }
 
     protected function shouldIgnore(Request $request): bool

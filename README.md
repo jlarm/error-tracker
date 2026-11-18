@@ -97,6 +97,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `scrubbed_inputs` | `password`, `token`, … | Request input keys to redact. |
 | `captured_headers` | `accept`, `user-agent`, … | Request headers to forward. |
 | `timeout` | `2` | HTTP timeout in seconds. |
+| `send_user_details` | `false` | Also send the logged-in user's name and email, not just their id (`ERROR_TRACKER_SEND_USER_DETAILS`). |
 | `telemetry.enabled` | `false` | Record and send request telemetry (`ERROR_TRACKER_TELEMETRY`). |
 | `telemetry.url` | derived | Telemetry endpoint; defaults to `url` with `/api/errors` → `/api/telemetry`. |
 | `telemetry.ignore_paths` | `['up']` | URL paths to skip, with `*` wildcards. |
@@ -108,9 +109,13 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 
 All settings can be overridden via env vars prefixed with `ERROR_TRACKER_`.
 
+## Users
+
+Exceptions and request telemetry include the logged-in user's id automatically, using the user the request already authenticated (reporting never triggers a session or database lookup). Set `ERROR_TRACKER_SEND_USER_DETAILS=true` to also send their name and email. Anything set with `ErrorTracker::user([...])` takes precedence over the automatic values.
+
 ## Request telemetry
 
-When `telemetry.enabled` is on, the package records one entry per HTTP request: the route pattern (e.g. `/tickets/{ticket}`, never the raw URL), method, status code, duration in milliseconds, start time and the logged-in user's ID.
+When `telemetry.enabled` is on, the package records one entry per HTTP request: the route pattern (e.g. `/tickets/{ticket}`, never the raw URL), method, status code, duration in milliseconds, start time and the logged-in user (see Users above).
 
 - The entry is built after the response has been sent, so visitors never wait on it.
 - Inertia partial reloads (deferred props, `router.reload({ only })`) are recorded as their own route, labelled with the props requested, e.g. `/dashboard (partial: weeklyDigestSummary)`. Slow deferred props then show up separately instead of being blended into the page's numbers.

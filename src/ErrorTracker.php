@@ -23,7 +23,10 @@ class ErrorTracker
     /** @var array<string, mixed>|null */
     protected ?array $user = null;
 
-    public function __construct(protected Config $config) {}
+    public function __construct(
+        protected Config $config,
+        protected ?CurrentUser $currentUser = null,
+    ) {}
 
     /**
      * Send a Throwable to the tracker. Safe to call from anywhere — the
@@ -41,7 +44,7 @@ class ErrorTracker
             ->fromException($e, $request, $level ?? 'error')
             ->withTags($this->tags)
             ->withContext($this->context)
-            ->withUser($this->user)
+            ->withUser($this->userForReport())
             ->withBreadcrumbs($this->breadcrumbs)
             ->build();
 
@@ -64,7 +67,7 @@ class ErrorTracker
             ->fromMessage($message, $level, $request)
             ->withTags($this->tags)
             ->withContext(array_merge_recursive($this->context, $context))
-            ->withUser($this->user)
+            ->withUser($this->userForReport())
             ->withBreadcrumbs($this->breadcrumbs)
             ->build();
 
@@ -134,6 +137,20 @@ class ErrorTracker
         $this->user = null;
 
         return $this;
+    }
+
+    /**
+     * The user to report with an event: the logged-in user (id, plus name and
+     * email when `send_user_details` is on), with anything set through
+     * user() taking precedence.
+     *
+     * @return array<string, mixed>|null
+     */
+    protected function userForReport(): ?array
+    {
+        $user = array_merge($this->currentUser?->resolve() ?? [], $this->user ?? []);
+
+        return $user === [] ? null : $user;
     }
 
     protected function shouldReport(Throwable $e): bool

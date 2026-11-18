@@ -31,6 +31,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
 
         $this->app->singleton(ErrorTracker::class, fn ($app) => new ErrorTracker(
             $app->make(Config::class),
+            $app->make(CurrentUser::class),
         ));
 
         $this->app->alias(ErrorTracker::class, 'error-tracker');
