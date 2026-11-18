@@ -103,6 +103,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `telemetry.ignore_paths` | `['up']` | URL paths to skip, with `*` wildcards. |
 | `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
 | `telemetry.ignore_jobs` | `[]` | Job classes to skip, with `*` wildcards. |
+| `telemetry.ignore_tasks` | `[]` | Scheduled tasks to skip, with `*` wildcards, matched against the command (`backup:*`) or description. |
 | `telemetry.buffer_path` | `storage/framework/cache/error-tracker` | Where unsent telemetry is buffered. |
 | `telemetry.buffer_max_bytes` | `10485760` (10 MB) | Buffer cap; past it, new entries are dropped and the oldest unsent ones discarded. |
 | `telemetry.max_batches_per_run` | `10` | Batches of 1,000 sent per minute while catching up. |
@@ -131,6 +132,10 @@ Each queued job attempt is recorded too: the job class, queue, connection, attem
 - `failed`: it threw on its last try, called `$this->fail()`, or ran past its attempts or `retryUntil()`.
 
 Each attempt is recorded once, and recording errors never reach the job.
+
+### Scheduled tasks
+
+Each scheduled task run is recorded with its command (or description, for closures and jobs), cron expression, timezone, outcome (`finished`, `failed` or `skipped`), exit code and duration. The dashboard uses the cron expression to flag runs that never happened. Tasks run in the background are recorded when `schedule:finish` reports their exit code, without a duration. The package's own `error-tracker:send-telemetry` task is never recorded.
 
 ### Sending
 

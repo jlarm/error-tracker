@@ -9,8 +9,14 @@ use Armp\ErrorTracker\Console\TestCommand;
 use Armp\ErrorTracker\Telemetry\FileTelemetryBuffer;
 use Armp\ErrorTracker\Telemetry\JobRecorder;
 use Armp\ErrorTracker\Telemetry\RequestRecorder;
+use Armp\ErrorTracker\Telemetry\ScheduledTaskRecorder;
 use Armp\ErrorTracker\Telemetry\TelemetryBuffer;
 use Armp\ErrorTracker\Telemetry\TelemetrySwitch;
+use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskFailed;
+use Illuminate\Console\Events\ScheduledTaskFinished;
+use Illuminate\Console\Events\ScheduledTaskSkipped;
+use Illuminate\Console\Events\ScheduledTaskStarting;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Debug\ExceptionHandler;
@@ -46,6 +52,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         // A singleton, not scoped: workers forget scoped instances between
         // jobs, which would lose each attempt's start time.
         $this->app->singleton(JobRecorder::class);
+        $this->app->singleton(ScheduledTaskRecorder::class);
     }
 
     public function boot(): void
@@ -60,6 +67,7 @@ class ErrorTrackerServiceProvider extends ServiceProvider
 
         $this->registerRequestTelemetry();
         $this->registerJobTelemetry();
+        $this->registerScheduledTaskTelemetry();
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
@@ -137,5 +145,29 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $events->listen(JobFailed::class, $record(
             fn (JobRecorder $recorder, JobFailed $event) => $recorder->finished($event->job, 'failed'),
         ));
+    }
+
+    /**
+     * Record each scheduled task run: when it starts, and how it ends.
+     */
+    protected function registerScheduledTaskTelemetry(): void
+    {
+        $events = $this->app->make(Dispatcher::class);
+
+        $record = function (string $method): callable {
+            return function (object $event) use ($method): void {
+                try {
+                    $this->app->make(ScheduledTaskRecorder::class)->{$method}($event->task);
+                } catch (Throwable) {
+                    // Telemetry must never reach the scheduler.
+                }
+            };
+        };
+
+        $events->listen(ScheduledTaskStarting::class, $record('starting'));
+        $events->listen(ScheduledTaskFinished::class, $record('finished'));
+        $events->listen(ScheduledTaskFailed::class, $record('failed'));
+        $events->listen(ScheduledTaskSkipped::class, $record('skipped'));
+        $events->listen(ScheduledBackgroundTaskFinished::class, $record('backgroundFinished'));
     }
 }

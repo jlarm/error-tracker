@@ -162,8 +162,10 @@ return [
     |
     | Records one entry per HTTP request (route, method, status, duration and
     | user id) after the response has been sent, and one per queued job
-    | attempt (class, queue, outcome, attempt and duration), for the
-    | dashboard's request, route and job charts. Off by default.
+    | attempt (class, queue, outcome, attempt and duration), and one per
+    | scheduled task run (command, schedule, outcome and duration), for the
+    | dashboard's request, route, job and scheduled task panels. Off by
+    | default.
     |
     | Entries are buffered on local disk and sent in batches every minute by
     | the `error-tracker:send-telemetry` command, which this package schedules
@@ -174,6 +176,8 @@ return [
     | ignore_paths:        URL paths to skip, with * wildcards (e.g. "up").
     | ignore_routes:       Route names to skip, with * wildcards ("horizon.*").
     | ignore_jobs:         Job classes to skip, with * wildcards.
+    | ignore_tasks:        Scheduled tasks to skip, with * wildcards, matched
+    |                      against the command ("backup:*") or description.
     | buffer_path:         Where the buffer lives. Defaults to
     |                      storage/framework/cache/error-tracker.
     | buffer_max_bytes:    Cap on the buffer. Past it, new entries are dropped
@@ -196,6 +200,10 @@ return [
         ],
 
         'ignore_jobs' => [
+            //
+        ],
+
+        'ignore_tasks' => [
             //
         ],
 
