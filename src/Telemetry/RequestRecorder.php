@@ -22,6 +22,11 @@ use Throwable;
  */
 class RequestRecorder
 {
+    /**
+     * The tracker stores routes up to this many characters.
+     */
+    private const MAX_ROUTE_LENGTH = 255;
+
     protected ?Request $request = null;
 
     protected ?Response $response = null;
@@ -82,12 +87,55 @@ class RequestRecorder
             'type' => 'request',
             'timestamp' => CarbonImmutable::createFromTimestampUTC($startedAt)->format('Y-m-d\TH:i:s.uP'),
             'method' => $request->getMethod(),
-            'route' => $route instanceof Route ? '/'.ltrim($route->uri(), '/') : null,
+            'route' => $route instanceof Route ? $this->routeLabel($route, $request) : null,
             'route_name' => $route instanceof Route ? $route->getName() : null,
             'status' => $response->getStatusCode(),
             'duration_ms' => round(max(0.0, $handledAt - $startedAt) * 1000, 2),
             'user_id' => $this->userId(),
         ];
+    }
+
+    /**
+     * The route's URI pattern. Inertia partial reloads (deferred props,
+     * `router.reload({ only })`) hit the same URI as the full page but do
+     * different work, so they are labelled with the props they asked for:
+     * "/dashboard (partial: weeklyDigestSummary)".
+     */
+    protected function routeLabel(Route $route, Request $request): string
+    {
+        $uri = '/'.ltrim($route->uri(), '/');
+
+        if (! $request->headers->has('X-Inertia')) {
+            return $uri;
+        }
+
+        $only = $this->propList($request->headers->get('X-Inertia-Partial-Data'));
+        $except = $this->propList($request->headers->get('X-Inertia-Partial-Except'));
+
+        $label = match (true) {
+            $only !== [] => $uri.' (partial: '.implode(', ', $only).')',
+            $except !== [] => $uri.' (partial: all except '.implode(', ', $except).')',
+            default => $uri,
+        };
+
+        return mb_strlen($label) > self::MAX_ROUTE_LENGTH
+            ? mb_substr($label, 0, self::MAX_ROUTE_LENGTH - 2).'…)'
+            : $label;
+    }
+
+    /**
+     * A comma-separated header as a sorted list, so the same props always
+     * produce the same label.
+     *
+     * @return list<string>
+     */
+    protected function propList(?string $header): array
+    {
+        $props = array_values(array_unique(array_filter(array_map('trim', explode(',', (string) $header)))));
+
+        sort($props, SORT_STRING);
+
+        return $props;
     }
 
     /**

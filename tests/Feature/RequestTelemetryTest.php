@@ -139,3 +139,55 @@ test('each request is recorded once', function () {
 
     expect($this->buffer->entries)->toHaveCount(2);
 });
+
+test('labels Inertia partial reloads with the props they asked for', function () {
+    Route::get('/dashboard', fn () => 'ok')->name('dashboard');
+
+    $this->get('/dashboard', ['X-Inertia' => 'true', 'X-Inertia-Partial-Data' => 'weeklyDigestSummary'])->assertOk();
+
+    expect($this->buffer->entries[0])
+        ->route->toBe('/dashboard (partial: weeklyDigestSummary)')
+        ->route_name->toBe('dashboard');
+});
+
+test('lists partial props sorted and once, so the label is stable', function () {
+    Route::get('/dashboard', fn () => 'ok');
+
+    $this->get('/dashboard', ['X-Inertia' => 'true', 'X-Inertia-Partial-Data' => 'pipeline, activity,pipeline'])->assertOk();
+
+    expect($this->buffer->entries[0]['route'])->toBe('/dashboard (partial: activity, pipeline)');
+});
+
+test('labels partial reloads that exclude props', function () {
+    Route::get('/dashboard', fn () => 'ok');
+
+    $this->get('/dashboard', ['X-Inertia' => 'true', 'X-Inertia-Partial-Except' => 'dealerships'])->assertOk();
+
+    expect($this->buffer->entries[0]['route'])->toBe('/dashboard (partial: all except dealerships)');
+});
+
+test('leaves full page loads and non-Inertia requests unlabelled', function (array $headers) {
+    Route::get('/dashboard', fn () => 'ok');
+
+    $this->get('/dashboard', $headers)->assertOk();
+
+    expect($this->buffer->entries[0]['route'])->toBe('/dashboard');
+})->with([
+    'browser page load' => [[]],
+    'full Inertia visit' => [['X-Inertia' => 'true']],
+    'partial header without Inertia' => [['X-Inertia-Partial-Data' => 'weeklyDigestSummary']],
+]);
+
+test('keeps long partial labels within the tracker route limit', function () {
+    Route::get('/dashboard', fn () => 'ok');
+
+    $props = implode(',', array_map(fn (int $i): string => "someVeryLongDeferredPropName{$i}", range(1, 20)));
+
+    $this->get('/dashboard', ['X-Inertia' => 'true', 'X-Inertia-Partial-Data' => $props])->assertOk();
+
+    $route = $this->buffer->entries[0]['route'];
+
+    expect(mb_strlen($route))->toBe(255)
+        ->and($route)->toStartWith('/dashboard (partial: someVeryLongDeferredPropName1, ')
+        ->and($route)->toEndWith('…)');
+});

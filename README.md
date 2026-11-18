@@ -112,6 +112,7 @@ All settings can be overridden via env vars prefixed with `ERROR_TRACKER_`.
 When `telemetry.enabled` is on, the package records one entry per HTTP request: the route pattern (e.g. `/tickets/{ticket}`, never the raw URL), method, status code, duration in milliseconds, start time and the logged-in user's ID.
 
 - The entry is built after the response has been sent, so visitors never wait on it.
+- Inertia partial reloads (deferred props, `router.reload({ only })`) are recorded as their own route, labelled with the props requested, e.g. `/dashboard (partial: weeklyDigestSummary)`. Slow deferred props then show up separately instead of being blended into the page's numbers.
 - The user ID is only read if the request already authenticated the user; telemetry never triggers a session or database lookup.
 - Any error while recording is swallowed and never reaches your app.
 
