@@ -103,6 +103,7 @@ ErrorTracker::breadcrumb('db.sql.query', 'select * from `users`', ['duration_ms'
 | `telemetry.ignore_paths` | `['up']` | URL paths to skip, with `*` wildcards. |
 | `telemetry.ignore_routes` | `[]` | Route names to skip, with `*` wildcards. |
 | `telemetry.ignore_jobs` | `[]` | Job classes to skip, with `*` wildcards. |
+| `telemetry.slow_query_ms` | `100` | Database queries at least this slow are recorded (`ERROR_TRACKER_SLOW_QUERY_MS`). `0` turns it off. |
 | `telemetry.ignore_tasks` | `[]` | Scheduled tasks to skip, with `*` wildcards, matched against the command (`backup:*`) or description. |
 | `telemetry.buffer_path` | `storage/framework/cache/error-tracker` | Where unsent telemetry is buffered. |
 | `telemetry.buffer_max_bytes` | `10485760` (10 MB) | Buffer cap; past it, new entries are dropped and the oldest unsent ones discarded. |
@@ -136,6 +137,10 @@ Each attempt is recorded once, and recording errors never reach the job.
 ### Scheduled tasks
 
 Each scheduled task run is recorded with its command (or description, for closures and jobs), cron expression, timezone, outcome (`finished`, `failed` or `skipped`), exit code and duration. The dashboard uses the cron expression to flag runs that never happened. Tasks run in the background are recorded when `schedule:finish` reports their exit code, without a duration. The package's own `error-tracker:send-telemetry` task is never recorded.
+
+### Slow queries
+
+Database queries at least `telemetry.slow_query_ms` (100ms by default) are recorded with their duration, connection and where they ran: the route (`GET /orders/{order}`), the queued job class, or the artisan command. Literal values are stripped first (`where email = ?`, `in (?)`), so no data from the query leaves your app and queries that differ only in their values group together. At most 50 slow queries are recorded per request, job or command.
 
 ### Sending
 

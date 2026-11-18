@@ -163,9 +163,9 @@ return [
     | Records one entry per HTTP request (route, method, status, duration and
     | user id) after the response has been sent, and one per queued job
     | attempt (class, queue, outcome, attempt and duration), and one per
-    | scheduled task run (command, schedule, outcome and duration), for the
-    | dashboard's request, route, job and scheduled task panels. Off by
-    | default.
+    | scheduled task run (command, schedule, outcome and duration), plus slow
+    | database queries, for the dashboard's request, route, job, scheduled
+    | task and query panels. Off by default.
     |
     | Entries are buffered on local disk and sent in batches every minute by
     | the `error-tracker:send-telemetry` command, which this package schedules
@@ -178,6 +178,8 @@ return [
     | ignore_jobs:         Job classes to skip, with * wildcards.
     | ignore_tasks:        Scheduled tasks to skip, with * wildcards, matched
     |                      against the command ("backup:*") or description.
+    | slow_query_ms:       Database queries at least this slow are recorded,
+    |                      with literal values stripped. 0 turns it off.
     | buffer_path:         Where the buffer lives. Defaults to
     |                      storage/framework/cache/error-tracker.
     | buffer_max_bytes:    Cap on the buffer. Past it, new entries are dropped
@@ -206,6 +208,8 @@ return [
         'ignore_tasks' => [
             //
         ],
+
+        'slow_query_ms' => (float) env('ERROR_TRACKER_SLOW_QUERY_MS', 100),
 
         'buffer_path' => env('ERROR_TRACKER_TELEMETRY_BUFFER_PATH'),
 

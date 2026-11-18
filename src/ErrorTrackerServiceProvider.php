@@ -6,12 +6,16 @@ namespace Armp\ErrorTracker;
 
 use Armp\ErrorTracker\Console\SendTelemetryCommand;
 use Armp\ErrorTracker\Console\TestCommand;
+use Armp\ErrorTracker\Telemetry\ExecutionContext;
 use Armp\ErrorTracker\Telemetry\FileTelemetryBuffer;
 use Armp\ErrorTracker\Telemetry\JobRecorder;
+use Armp\ErrorTracker\Telemetry\QueryRecorder;
 use Armp\ErrorTracker\Telemetry\RequestRecorder;
 use Armp\ErrorTracker\Telemetry\ScheduledTaskRecorder;
 use Armp\ErrorTracker\Telemetry\TelemetryBuffer;
 use Armp\ErrorTracker\Telemetry\TelemetrySwitch;
+use Illuminate\Console\Events\CommandFinished;
+use Illuminate\Console\Events\CommandStarting;
 use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
 use Illuminate\Console\Events\ScheduledTaskFailed;
 use Illuminate\Console\Events\ScheduledTaskFinished;
@@ -21,11 +25,13 @@ use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository as Config;
 use Illuminate\Contracts\Debug\ExceptionHandler;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Http\Events\RequestHandled;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Events\JobReleasedAfterException;
+use Illuminate\Routing\Events\RouteMatched;
 use Illuminate\Support\ServiceProvider;
 use Throwable;
 
@@ -53,6 +59,8 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         // jobs, which would lose each attempt's start time.
         $this->app->singleton(JobRecorder::class);
         $this->app->singleton(ScheduledTaskRecorder::class);
+        $this->app->singleton(ExecutionContext::class);
+        $this->app->singleton(QueryRecorder::class);
     }
 
     public function boot(): void
@@ -68,6 +76,8 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $this->registerRequestTelemetry();
         $this->registerJobTelemetry();
         $this->registerScheduledTaskTelemetry();
+        $this->registerExecutionContext();
+        $this->registerQueryTelemetry();
 
         if ($this->app->runningInConsole()) {
             $this->publishes([
@@ -169,5 +179,60 @@ class ErrorTrackerServiceProvider extends ServiceProvider
         $events->listen(ScheduledTaskFailed::class, $record('failed'));
         $events->listen(ScheduledTaskSkipped::class, $record('skipped'));
         $events->listen(ScheduledBackgroundTaskFinished::class, $record('backgroundFinished'));
+    }
+
+    /**
+     * Track what the app is doing (route, job or command), to label slow
+     * queries and outgoing requests with where they came from.
+     */
+    protected function registerExecutionContext(): void
+    {
+        $events = $this->app->make(Dispatcher::class);
+
+        $context = function (callable $callback): callable {
+            return function (object $event) use ($callback): void {
+                try {
+                    $callback($this->app->make(ExecutionContext::class), $event);
+                } catch (Throwable) {
+                    // Telemetry must never reach the host app.
+                }
+            };
+        };
+
+        $events->listen(RouteMatched::class, $context(
+            fn (ExecutionContext $context, RouteMatched $event) => $context->enter(
+                $event->request->getMethod().' /'.ltrim($event->route->uri(), '/'),
+            ),
+        ));
+
+        $events->listen(JobProcessing::class, $context(
+            fn (ExecutionContext $context, JobProcessing $event) => $context->enter($event->job->resolveName()),
+        ));
+
+        foreach ([JobProcessed::class, JobFailed::class, JobReleasedAfterException::class] as $finished) {
+            $events->listen($finished, $context(fn (ExecutionContext $context) => $context->leave()));
+        }
+
+        $events->listen(CommandStarting::class, $context(
+            fn (ExecutionContext $context, CommandStarting $event) => $context->enter(
+                $event->command === null ? null : 'artisan '.$event->command,
+            ),
+        ));
+
+        $events->listen(CommandFinished::class, $context(fn (ExecutionContext $context) => $context->leave()));
+    }
+
+    /**
+     * Record database queries slower than the configured threshold.
+     */
+    protected function registerQueryTelemetry(): void
+    {
+        $this->app->make(Dispatcher::class)->listen(QueryExecuted::class, function (QueryExecuted $query): void {
+            try {
+                $this->app->make(QueryRecorder::class)->executed($query);
+            } catch (Throwable) {
+                // Telemetry must never reach the host app.
+            }
+        });
     }
 }
