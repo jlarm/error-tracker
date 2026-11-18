@@ -71,6 +71,12 @@ class ErrorTrackerServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        $config = $this->app->make(Config::class);
+
+        if (blank($config->get('error-tracker.release'))) {
+            $config->set('error-tracker.release', ReleaseDetector::fromPath($this->app->basePath()));
+        }
+
         $this->callAfterResolving(ExceptionHandler::class, function ($handler) {
             if (method_exists($handler, 'reportable')) {
                 $handler->reportable(function (Throwable $e) {

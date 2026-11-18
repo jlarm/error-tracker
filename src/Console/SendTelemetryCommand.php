@@ -25,10 +25,17 @@ class SendTelemetryCommand extends Command
 
     protected $description = 'Send buffered request telemetry to the error tracker.';
 
+    /**
+     * The deployed release, sent with each batch.
+     */
+    protected ?string $release = null;
+
     public function handle(Config $config, FileTelemetryBuffer $buffer): int
     {
         $url = $this->telemetryUrl($config);
         $key = (string) $config->get('error-tracker.key');
+        $release = $config->get('error-tracker.release');
+        $this->release = is_string($release) && $release !== '' ? mb_substr($release, 0, 255) : null;
 
         if (! $config->get('error-tracker.enabled', true)
             || ! $config->get('error-tracker.telemetry.enabled', false)
@@ -89,7 +96,10 @@ class SendTelemetryCommand extends Command
                 ->asJson()
                 ->acceptJson()
                 ->timeout($timeout)
-                ->post($url, ['entries' => $batch]);
+                ->post($url, array_filter([
+                    'entries' => $batch,
+                    'release' => $this->release,
+                ], fn (mixed $value): bool => $value !== null));
         } catch (Throwable) {
             return 'retry';
         }

@@ -152,6 +152,10 @@ Calls your app makes with Laravel's HTTP client (`Http::get()` and friends) are 
 
 Requests at least `telemetry.timeline_threshold_ms` long (1 second by default) carry a timeline: every database query and outgoing HTTP call made while handling them, with when each started and how long it took, so the dashboard can show where the time went. Query SQL is stripped of literal values, and calls show only their method, host and status. Up to 200 spans are kept per request.
 
+### Releases
+
+Each telemetry batch carries the app's release, so the dashboard can mark deploys on its charts. It is `ERROR_TRACKER_RELEASE` when set; otherwise the release folder of a zero-downtime deploy (`releases/<id>/`, or Ploi's timestamped `03112026_195654/`) is used, for exceptions too.
+
 ### Sending
 
 Entries are appended to a small file buffer under `storage/framework/cache/error-tracker/`. Every minute, `php artisan error-tracker:send-telemetry` sends them to the dashboard in batches of up to 1,000 and clears what was sent.

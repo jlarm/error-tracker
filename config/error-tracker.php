@@ -41,7 +41,10 @@ return [
     |--------------------------------------------------------------------------
     |
     | Identifies which version of your app produced an error. Common choices:
-    | a git sha, a tag, or your deploy id. Stored in the issue's "release" pill.
+    | a git sha, a tag, or your deploy id. Stored in the issue's "release" pill
+    | and sent with telemetry, so the dashboard can mark each deploy on its
+    | charts. When empty, the release folder of a zero-downtime deploy
+    | (`releases/<id>/` or Ploi's `03112026_195654/`) is used, if there is one.
     |
     */
     'release' => env('ERROR_TRACKER_RELEASE'),
